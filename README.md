@@ -1,3 +1,9 @@
+Redmine LDAP passwd plugin - forked from https://github.com/xeagle2/redmine_ldap_passwd
+Supported LDAP backend - FreeIPA 4.x
+
+Original Readme:
+=================
+
 # Redmine LDAP Passwd plugin >= Redmine 3.0
 
 The plugin extends AuthSourceLdap to introduce the ability to recover or change user password.

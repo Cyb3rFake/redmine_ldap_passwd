@@ -1,57 +1,53 @@
 class AuthSourceLdapPasswd < AuthSourceLdap
   def allow_password_changes?
-    self.tls
+    tls
   end
 
-  def change_user_password(user, password, new_password)
+  def change_user_password(user, current_password, new_password)
     return false unless AuthSourceLdapPasswd.change_password_allowed?(user)
 
-    attrs = get_user_dn(user.login, password)
-    if attrs && attrs[:dn]
-      if self.account && self.account.include?("$login")
-        ldap_con = initialize_ldap_con(self.account.sub("$login", Net::LDAP::DN.escape(user.login)), password)
-      else
-        ldap_con = initialize_ldap_con(self.account, self.account_password)
-      end
+    attrs = get_user_dn(user.login, current_password)
+    return false unless attrs&.[](:dn)
 
-      ops = [[:replace, :unicodePwd, AuthSourceLdapPasswd.str2unicodePwd(new_password)]]
-      ldap_con.modify :dn => attrs[:dn], :operations => ops
+    ldap_user = if account&.include?("$login")
+                  initialize_ldap_con(account.sub("$login", Net::LDAP::DN.escape(user.login)), current_password)
+                else
+                  initialize_ldap_con(account, account_password)
+                end
 
-      result = ldap_con.get_operation_result
-      if result.code == 0
-        user.passwd_changed_on = Time.now.change(:usec => 0)
-        user.save
+    ops = [[:replace, :userPassword, new_password]]
+    ldap_user.modify(dn: attrs[:dn], operations: ops)
 
-        return true
-      else
-        return result
-      end
+    result = ldap_user.get_operation_result
+    if result.code == 0
+      user.passwd_changed_on = Time.now.change(usec: 0)
+      user.save
+      true
+    else
+      result
     end
-
-    false
+  rescue Net::LDAP::Error => e
+    raise AuthSourceException, e.message
   end
 
   def self.str2unicodePwd(str)
-    ('"' + str + '"').encode("utf-16le").force_encoding("utf-8")
+    "\"#{str}\"".encode("utf-16le").force_encoding("utf-8")
   end
 
   def self.change_password_allowed?(user)
-    return false if user.nil?
-    AuthSourceLdapPasswd.name.eql?(user.auth_source.type)
+    user&.auth_source&.type == name
   end
 
   def self.is_password_valid(password)
     return false if password.nil? || password.length < 7
 
-    s = 0
-    contains = [
-        password.match(/\p{Lower}/) ? 1 : 0,
-        password.match(/\p{Upper}/) ? 1 : 0,
-        password.match(/\p{Digit}/) ? 1 : 0,
-        password.match(/[^\\w\\d]+/) ? 1 : 0
-    ]
-    contains.each { |a| s += a }
+    score = [
+      password.match?(/\p{Lower}/) ? 1 : 0,
+      password.match?(/\p{Upper}/) ? 1 : 0,
+      password.match?(/\p{Digit}/) ? 1 : 0,
+      password.match?(/[^\w\d]/) ? 1 : 0
+    ].sum
 
-    return s >= 3
+    score >= 3
   end
 end
