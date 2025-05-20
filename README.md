@@ -4,7 +4,7 @@ Supported LDAP backend - FreeIPA 4.x
 Original Readme:
 =================
 
-# Redmine LDAP Passwd plugin >= Redmine 3.0
+# Redmine LDAP Passwd plugin >= Redmine 6.0
 
 The plugin extends AuthSourceLdap to introduce the ability to recover or change user password.
 
@@ -31,3 +31,6 @@ The plugin extends AuthSourceLdap to introduce the ability to recover or change 
 
 * **3.0 (2016-05-31)**
     * Initial version released.
+* **3.0.5 (2025-05.20)**
+    * Initial version released.
+    
