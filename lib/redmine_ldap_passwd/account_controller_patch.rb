@@ -1,51 +1,40 @@
 module RedmineLdapPasswd
   module AccountControllerPatch
-    def self.included(base)
-      base.class_eval do
-        alias_method :lost_password_without_ldap, :lost_password
-        alias_method :lost_password, :lost_password_with_ldap
+    def change_password
+      Rails.logger.warn("LDAP PATCH: change_password override triggered")
+      @user = User.current
+      unless @user.logged?
+        redirect_to signin_path
+        return
       end
-    end
 
-    def lost_password_with_ldap
-      if params[:token]
-        @token = Token.find_token("recovery", params[:token].to_s)
-        if @token.nil? || @token.expired?
-          redirect_to home_url
-          return
-        end
-
-        @user = @token.user
-        unless @user&.active?
-          redirect_to home_url
-          return
-        end
-
+      if @user.auth_source.is_a?(AuthSourceLdapPasswd)
         if request.post?
           if params[:new_password] != params[:new_password_confirmation]
             flash.now[:error] = l(:notice_new_password_and_confirmation_different)
           elsif !AuthSourceLdapPasswd.is_password_valid(params[:new_password])
             flash.now[:error] = l(:notice_new_password_format)
           else
-            result = @user.auth_source.change_user_password(@user, '', params[:new_password])
+            result = @user.auth_source.change_user_password(@user, params[:password], params[:new_password])
             if result == true
               flash[:notice] = l(:notice_account_password_updated)
-              redirect_to signin_path
-            elsif result == false
-              lost_password_without_ldap
-            else
+              redirect_to my_account_path
+              return
+            elsif result.respond_to?(:message)
               flash.now[:error] = result.message
+            else
+              flash.now[:error] = l(:notice_account_wrong_password)
             end
-            return
           end
         end
-
-        render template: 'account/password_recovery'
+        render action: 'change_password'
       else
-        lost_password_without_ldap
+        super
       end
     rescue Net::LDAP::LdapError => e
       raise AuthSourceException, e.message
     end
   end
 end
+
+AccountController.prepend RedmineLdapPasswd::AccountControllerPatch
